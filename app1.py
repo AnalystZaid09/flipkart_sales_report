@@ -66,7 +66,7 @@ if flipkart_file and top_products_file:
         final_df["FNS"] = final_df["SKU ID"].map(fns_map)
         final_df["FNS"] = final_df["FNS"].fillna("")
 
-        # 🔹 NEW: Add Vendor SKU Code column (VLOOKUP-style on SKU ID over PM B:D, returning Vendor SKU Codes / column D)
+        # Add Vendor SKU Code column (VLOOKUP-style using SKU ID)
         vendor_candidates = [
             c for c in flipkart_unique.columns
             if isinstance(c, str) and "vendor" in c.lower() and "sku" in c.lower()
@@ -97,12 +97,10 @@ if flipkart_file and top_products_file:
             cols.insert(idx + 1, cols.pop(cols.index("FNS")))
         final_df = final_df[cols]
 
-        # 🔹 NEW: Insert Vendor SKU Code between FNS and FBF Units Percentage (i.e. immediately after FNS)
+        # Insert Vendor SKU Code between FNS and FBF Units Percentage (i.e. immediately after FNS)
         cols = list(final_df.columns)
         if "FNS" in cols and "Vendor SKU Code" in cols:
-            # remove current position
             cols.remove("Vendor SKU Code")
-            # insert right after FNS (so if FBF Units Percentage is after FNS, Vendor SKU Code falls between them)
             insert_pos = cols.index("FNS") + 1
             cols.insert(insert_pos, "Vendor SKU Code")
             final_df = final_df[cols]
@@ -150,13 +148,13 @@ if flipkart_file and top_products_file:
             c1, c2 = st.columns(2)
 
             with c1:
-                st.dataframe(pivot_brand, use_container_width=True)
+                st.dataframe(pivot_brand, width="stretch")
                 st.download_button("📥 Download Brand Pivot", pivot_brand.to_csv(), "pivot_brand.csv")
 
             with c2:
                 fig = px.bar(pivot_brand_chart, x='Brand', y='Sales',
                              title='Sales by Brand', color='Sales')
-                st.plotly_chart(fig, use_container_width=True)
+                st.plotly_chart(fig, width="stretch")
 
         # MANAGER TAB
         with tab2:
@@ -165,18 +163,18 @@ if flipkart_file and top_products_file:
             c1, c2 = st.columns(2)
 
             with c1:
-                st.dataframe(pivot_manager, use_container_width=True)
+                st.dataframe(pivot_manager, width="stretch")
                 st.download_button("📥 Download Manager Pivot", pivot_manager.to_csv(), "pivot_manager.csv")
 
             with c2:
                 fig = px.bar(pivot_manager_chart, x='Manager', y='Sales',
                              title='Sales by Manager', color='Sales')
-                st.plotly_chart(fig, use_container_width=True)
+                st.plotly_chart(fig, width="stretch")
 
         # RAW DATA TAB
         with tab3:
             st.subheader("Complete Dataset (with cost, FNS & Vendor SKU Code)")
-            st.dataframe(final_df, use_container_width=True)
+            st.dataframe(final_df, width="stretch")
             st.download_button("📥 Download Complete CSV", final_df.to_csv(index=False), "final_dataset.csv")
 
         # CHART TAB
@@ -187,12 +185,12 @@ if flipkart_file and top_products_file:
             with c1:
                 fig = px.pie(pivot_brand_chart, values='Sales', names='Brand',
                              title='Sales Distribution by Brand')
-                st.plotly_chart(fig, use_container_width=True)
+                st.plotly_chart(fig, width="stretch")
 
             with c2:
                 fig = px.pie(pivot_manager_chart, values='Sales', names='Manager',
                              title='Sales Distribution by Manager')
-                st.plotly_chart(fig, use_container_width=True)
+                st.plotly_chart(fig, width="stretch")
 
         # BRAND / FNS TAB WITH SUBTOTALS & GRAND TOTAL
         with tab5:
@@ -254,7 +252,7 @@ if flipkart_file and top_products_file:
                 ["Brand", "FNS"]
             )
 
-            st.dataframe(display_bf, use_container_width=True)
+            st.dataframe(display_bf, width="stretch")
             st.download_button(
                 "📥 Download Brand / FNS Pivot",
                 display_bf.to_csv(),
@@ -333,7 +331,7 @@ if flipkart_file and top_products_file:
                 ["Manager", "Brand", "FNS"]
             )
 
-            st.dataframe(display_df, use_container_width=True)
+            st.dataframe(display_df, width="stretch")
             st.download_button(
                 "📥 Download Manager / Brand / FNS Pivot",
                 display_df.to_csv(),
