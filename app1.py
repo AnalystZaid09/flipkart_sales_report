@@ -66,6 +66,27 @@ if flipkart_file and top_products_file:
         final_df["FNS"] = final_df["SKU ID"].map(fns_map)
         final_df["FNS"] = final_df["FNS"].fillna("")
 
+        # 🔹 NEW: Add Vendor SKU Code column (VLOOKUP-style on SKU ID over PM B:D, returning Vendor SKU Codes / column D)
+        vendor_candidates = [
+            c for c in flipkart_unique.columns
+            if isinstance(c, str) and "vendor" in c.lower() and "sku" in c.lower()
+        ]
+        if vendor_candidates:
+            vendor_col = vendor_candidates[0]
+        else:
+            # approximate: column D (index 3) from B:D as per your Excel formula
+            if len(flipkart_unique.columns) > 3:
+                vendor_col = flipkart_unique.columns[3]
+            else:
+                vendor_col = flipkart_unique.columns[-1]
+
+        # Assume column B (index 1) in PM corresponds to SKU Id for lookup (as in your VLOOKUP range B:D)
+        key_col = flipkart_unique.columns[1]
+        vendor_map = flipkart_unique.set_index(key_col)[vendor_col]
+
+        final_df["Vendor SKU Code"] = final_df["SKU ID"].map(vendor_map)
+        final_df["Vendor SKU Code"] = final_df["Vendor SKU Code"].astype(str).fillna("")
+
         # Insert cost after Gross Units and FNS after cost
         cols = list(final_df.columns)
         if "Gross Units" in cols and "cost" in cols:
@@ -75,6 +96,16 @@ if flipkart_file and top_products_file:
             idx = cols.index("cost")
             cols.insert(idx + 1, cols.pop(cols.index("FNS")))
         final_df = final_df[cols]
+
+        # 🔹 NEW: Insert Vendor SKU Code between FNS and FBF Units Percentage (i.e. immediately after FNS)
+        cols = list(final_df.columns)
+        if "FNS" in cols and "Vendor SKU Code" in cols:
+            # remove current position
+            cols.remove("Vendor SKU Code")
+            # insert right after FNS (so if FBF Units Percentage is after FNS, Vendor SKU Code falls between them)
+            insert_pos = cols.index("FNS") + 1
+            cols.insert(insert_pos, "Vendor SKU Code")
+            final_df = final_df[cols]
 
         # Simple pivots (Brand, Manager)
         pivot_brand = final_df.pivot_table(
@@ -144,7 +175,7 @@ if flipkart_file and top_products_file:
 
         # RAW DATA TAB
         with tab3:
-            st.subheader("Complete Dataset (with cost and FNS)")
+            st.subheader("Complete Dataset (with cost, FNS & Vendor SKU Code)")
             st.dataframe(final_df, use_container_width=True)
             st.download_button("📥 Download Complete CSV", final_df.to_csv(index=False), "final_dataset.csv")
 
