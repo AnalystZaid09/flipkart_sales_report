@@ -15,14 +15,19 @@ with col1:
     flipkart_file = st.file_uploader("Upload Flipkart PM Excel File", type=['xlsx'])
 
 with col2:
-    top_products_file = st.file_uploader("Upload Top Products CSV File", type=['csv'])
+    top_products_file = st.file_uploader("Upload Top Products File (CSV / Excel)", type=['csv','xlsx','xls'])
 
 if flipkart_file and top_products_file:
     try:
-        # Load files
+        # Load Flipkart Excel file
         flipkart = pd.read_excel(flipkart_file)
-        top = pd.read_csv(top_products_file)
-        
+
+        # Detect file format & load Top Products file accordingly
+        if top_products_file.name.endswith('.csv'):
+            top = pd.read_csv(top_products_file)
+        else:
+            top = pd.read_excel(top_products_file)
+
         # Clean keys
         flipkart['Flipkart Sku Name'] = flipkart['Flipkart Sku Name'].astype(str).str.strip()
         top['SKU ID'] = top['SKU ID'].astype(str).str.strip()
@@ -346,3 +351,4 @@ if flipkart_file and top_products_file:
 
 else:
     st.info("👆 Please upload both files to begin.")
+
