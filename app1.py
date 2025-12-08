@@ -2,28 +2,36 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
+import warnings
+
+# Suppress openpyxl default style warning
+warnings.filterwarnings("ignore", message="Workbook contains no default style*")
 
 st.set_page_config(page_title="Sales Analysis Dashboard", layout="wide")
 
 st.title("📊 Sales Analysis Dashboard")
-st.markdown("Upload your Flipkart PM Excel file and Top Products CSV to analyze sales by brand and manager.")
+st.markdown("Upload your Flipkart PM Excel file and Top Products file (CSV/Excel) to analyze sales by brand and manager.")
 
 # File uploaders
 col1, col2 = st.columns(2)
 
 with col1:
-    flipkart_file = st.file_uploader("Upload Flipkart PM Excel File", type=['xlsx'])
+    flipkart_file = st.file_uploader("Upload Flipkart PM Excel File", type=['xlsx', 'xls'])
 
 with col2:
-    top_products_file = st.file_uploader("Upload Top Products File (CSV / Excel)", type=['csv','xlsx','xls'])
+    top_products_file = st.file_uploader(
+        "Upload Top Products File (CSV / Excel)",
+        type=['csv', 'xlsx', 'xls']
+    )
 
 if flipkart_file and top_products_file:
     try:
-        # Load Flipkart Excel file
+        # Load Flipkart PM Excel file
         flipkart = pd.read_excel(flipkart_file)
 
-        # Detect file format & load Top Products file accordingly
-        if top_products_file.name.endswith('.csv'):
+        # Load Top Products file depending on extension
+        top_filename = top_products_file.name.lower()
+        if top_filename.endswith(".csv"):
             top = pd.read_csv(top_products_file)
         else:
             top = pd.read_excel(top_products_file)
@@ -31,7 +39,7 @@ if flipkart_file and top_products_file:
         # Clean keys
         flipkart['Flipkart Sku Name'] = flipkart['Flipkart Sku Name'].astype(str).str.strip()
         top['SKU ID'] = top['SKU ID'].astype(str).str.strip()
-        
+
         # Drop duplicates from flipkart (like VLOOKUP first match)
         flipkart_unique = flipkart.drop_duplicates(subset=['Flipkart Sku Name'], keep='first')
 
@@ -110,6 +118,20 @@ if flipkart_file and top_products_file:
             cols.insert(insert_pos, "Vendor SKU Code")
             final_df = final_df[cols]
 
+        # 🔄 Normalize column names & map Final Sale Amount / Final Sales Amount -> Sales
+        final_df.columns = final_df.columns.str.strip()
+
+        if "Sales" not in final_df.columns:
+            if "Final Sale Amount" in final_df.columns:
+                final_df = final_df.rename(columns={"Final Sale Amount": "Sales"})
+            elif "Final Sales Amount" in final_df.columns:
+                final_df = final_df.rename(columns={"Final Sales Amount": "Sales"})
+            else:
+                raise KeyError(
+                    "❌ Could not find a sales column. "
+                    "Expected 'Final Sale Amount' or 'Final Sales Amount' in the Top Products file."
+                )
+
         # Simple pivots (Brand, Manager)
         pivot_brand = final_df.pivot_table(
             index='Brand',
@@ -118,7 +140,7 @@ if flipkart_file and top_products_file:
             fill_value=0
         )
         pivot_brand.loc['Grand Total'] = pivot_brand.sum()
-        
+
         pivot_manager = final_df.pivot_table(
             index='Manager',
             values=['Gross Units', 'Sales'],
@@ -145,7 +167,7 @@ if flipkart_file and top_products_file:
             "📦 Brand / FNS Pivot",
             "🏷 Manager / Brand / FNS Pivot"
         ])
-        
+
         # BRAND TAB
         with tab1:
             st.subheader("Sales by Brand")
@@ -159,7 +181,7 @@ if flipkart_file and top_products_file:
             with c2:
                 fig = px.bar(pivot_brand_chart, x='Brand', y='Sales',
                              title='Sales by Brand', color='Sales')
-                st.plotly_chart(fig, width="stretch")
+                st.plotly_chart(fig, use_container_width=True)
 
         # MANAGER TAB
         with tab2:
@@ -174,7 +196,7 @@ if flipkart_file and top_products_file:
             with c2:
                 fig = px.bar(pivot_manager_chart, x='Manager', y='Sales',
                              title='Sales by Manager', color='Sales')
-                st.plotly_chart(fig, width="stretch")
+                st.plotly_chart(fig, use_container_width=True)
 
         # RAW DATA TAB
         with tab3:
@@ -190,12 +212,12 @@ if flipkart_file and top_products_file:
             with c1:
                 fig = px.pie(pivot_brand_chart, values='Sales', names='Brand',
                              title='Sales Distribution by Brand')
-                st.plotly_chart(fig, width="stretch")
+                st.plotly_chart(fig, use_container_width=True)
 
             with c2:
                 fig = px.pie(pivot_manager_chart, values='Sales', names='Manager',
                              title='Sales Distribution by Manager')
-                st.plotly_chart(fig, width="stretch")
+                st.plotly_chart(fig, use_container_width=True)
 
         # BRAND / FNS TAB WITH SUBTOTALS & GRAND TOTAL
         with tab5:
@@ -351,4 +373,3 @@ if flipkart_file and top_products_file:
 
 else:
     st.info("👆 Please upload both files to begin.")
-
