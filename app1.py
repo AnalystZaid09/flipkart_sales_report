@@ -1,68 +1,106 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
-import plotly.graph_objects as go
 import warnings
 
 # Suppress openpyxl default style warning
 warnings.filterwarnings("ignore", message="Workbook contains no default style*")
 
+# ---------- PAGE CONFIG ----------
 st.set_page_config(page_title="Sales Analysis Dashboard", layout="wide")
 
+# ---------- SIDEBAR ----------
+with st.sidebar:
+    st.title("⚙️ Controls")
+    st.markdown(
+        """
+        **Steps:**
+        1. Flipkart PM Excel upload karein  
+        2. Top Products file upload karein (CSV / Excel)  
+        3. Dashboard auto-generate ho jayega ✅  
+        """
+    )
+    st.markdown("---")
+    st.markdown("**File Status:**")
+    st.write("📁 Flipkart PM File: ", "✅ Uploaded" if "flipkart_file" in st.session_state else "⏳ Waiting")
+    st.write("📁 Top Products File: ", "✅ Uploaded" if "top_products_file" in st.session_state else "⏳ Waiting")
+
+# ---------- MAIN TITLE ----------
 st.title("📊 Sales Analysis Dashboard")
 st.markdown(
-    "Upload your Flipkart PM Excel file and Top Products file (CSV/Excel) to analyze sales by brand and manager."
+    "Upload your **Flipkart PM Excel** file and **Top Products** file (CSV/Excel) "
+    "to analyze sales by **Brand** and **Manager**."
 )
 
-# File uploaders
+# ---------- FILE UPLOADERS ----------
 col1, col2 = st.columns(2)
 
 with col1:
-    flipkart_file = st.file_uploader("Upload Flipkart PM Excel File", type=["xlsx", "xls"])
+    flipkart_file = st.file_uploader(
+        "Upload Flipkart PM Excel File",
+        type=["xlsx", "xls"],
+        key="flipkart_file"
+    )
 
 with col2:
     top_products_file = st.file_uploader(
         "Upload Top Products File (CSV / Excel)",
         type=["csv", "xlsx", "xls"],
+        key="top_products_file"
     )
 
+# ---------- MAIN LOGIC ----------
 if flipkart_file and top_products_file:
     try:
-        # Load Flipkart PM Excel file
+        # ---- LOAD FILES ----
         flipkart = pd.read_excel(flipkart_file)
 
-        # Load Top Products file depending on extension
         top_filename = top_products_file.name.lower()
         if top_filename.endswith(".csv"):
             top = pd.read_csv(top_products_file)
         else:
             top = pd.read_excel(top_products_file)
 
-        # Clean keys
+        # ---- BASIC VALIDATION ----
+        required_top_cols = ["SKU ID"]
+        for col in required_top_cols:
+            if col not in top.columns:
+                raise KeyError(f"Top Products file me required column missing hai: '{col}'")
+
+        if "Flipkart Sku Name" not in flipkart.columns:
+            raise KeyError("Flipkart PM file me 'Flipkart Sku Name' column missing hai.")
+
+        # ---- CLEAN KEYS ----
         flipkart["Flipkart Sku Name"] = flipkart["Flipkart Sku Name"].astype(str).str.strip()
         top["SKU ID"] = top["SKU ID"].astype(str).str.strip()
 
-        # ✅ Top Products file me agar Brand column hai to usko Brand1 bana do
+        # Top Products file me agar Brand column hai to usko Brand1 bana do
         if "Brand" in top.columns:
             top = top.rename(columns={"Brand": "Brand1"})
 
-        # Drop duplicates from flipkart (like VLOOKUP first match)
+        # ---- DROP DUPLICATES (VLOOKUP style) ----
         flipkart_unique = flipkart.drop_duplicates(subset=["Flipkart Sku Name"], keep="first")
 
-        # Detect CP column
+        # ---- DETECT CP COLUMN ----
         cp_candidates = [
-            c for c in flipkart_unique.columns if isinstance(c, str) and c.lower().startswith("cp")
+            c for c in flipkart_unique.columns
+            if isinstance(c, str) and c.lower().startswith("cp")
         ]
         if cp_candidates:
             cp_col = cp_candidates[0]
         else:
-            cp_col = flipkart_unique.columns[8]  # fallback to column I
+            # fallback to column I (index 8)
+            if len(flipkart_unique.columns) > 8:
+                cp_col = flipkart_unique.columns[8]
+            else:
+                raise KeyError("CP column detect nahi ho paya. Please ensure CP se start hota hai.")
 
         cp_map = flipkart_unique.set_index("Flipkart Sku Name")[cp_col]
 
-        # Detect FNS column
+        # ---- DETECT FNS COLUMN ----
         fns_candidates = [
-            c for c in flipkart_unique.columns if isinstance(c, str) and c.lower().startswith("fns")
+            c for c in flipkart_unique.columns
+            if isinstance(c, str) and c.lower().startswith("fns")
         ]
         if fns_candidates:
             fns_col = fns_candidates[0]
@@ -71,51 +109,51 @@ if flipkart_file and top_products_file:
 
         fns_map = flipkart_unique.set_index("Flipkart Sku Name")[fns_col]
 
-        # Merge Top + Brand / Manager lookup
-        final_df = (
-            top.merge(
-                flipkart_unique[["Flipkart Sku Name", "Brand Manager", "Brand"]],
-                left_on="SKU ID",
-                right_on="Flipkart Sku Name",
-                how="left",
-            )
-            .rename(columns={"Brand Manager": "Manager"})
-        )
+        # ---- MERGE TOP + FLIPKART (BRAND / MANAGER) ----
+        if not {"Brand Manager", "Brand"}.issubset(flipkart_unique.columns):
+            raise KeyError("Flipkart PM file me 'Brand Manager' ya 'Brand' column missing hai.")
+
+        final_df = top.merge(
+            flipkart_unique[["Flipkart Sku Name", "Brand Manager", "Brand"]],
+            left_on="SKU ID",
+            right_on="Flipkart Sku Name",
+            how="left",
+        ).rename(columns={"Brand Manager": "Manager"})
 
         final_df = final_df.drop(columns=["Flipkart Sku Name"], errors="ignore")
 
-        # Add cost column
+        # ---- ADD COST ----
         final_df["cost"] = final_df["SKU ID"].map(cp_map)
         final_df["cost"] = pd.to_numeric(final_df["cost"], errors="coerce").fillna(0)
 
-        # Add FNS column
+        # ---- ADD FNS ----
         final_df["FNS"] = final_df["SKU ID"].map(fns_map)
         final_df["FNS"] = final_df["FNS"].fillna("")
 
-        # Add Vendor SKU Code column (VLOOKUP-style using SKU ID)
+        # ---- VENDOR SKU CODE (VLOOKUP style) ----
         vendor_candidates = [
-            c
-            for c in flipkart_unique.columns
+            c for c in flipkart_unique.columns
             if isinstance(c, str) and "vendor" in c.lower() and "sku" in c.lower()
         ]
         if vendor_candidates:
             vendor_col = vendor_candidates[0]
         else:
-            # approximate: column D (index 3) from B:D as per your Excel formula
+            # approximate: column D (index 3)
             if len(flipkart_unique.columns) > 3:
                 vendor_col = flipkart_unique.columns[3]
             else:
                 vendor_col = flipkart_unique.columns[-1]
 
-        # Assume column B (index 1) in PM corresponds to SKU Id for lookup (as in your VLOOKUP range B:D)
-        key_col = flipkart_unique.columns[1]
+        key_col = flipkart_unique.columns[1]  # assume column B (index 1) has SKU Id
         vendor_map = flipkart_unique.set_index(key_col)[vendor_col]
 
         final_df["Vendor SKU Code"] = final_df["SKU ID"].map(vendor_map)
         final_df["Vendor SKU Code"] = final_df["Vendor SKU Code"].astype(str).fillna("")
 
-        # Insert cost after Gross Units and FNS after cost
+        # ---- COLUMN ORDER ADJUSTMENTS ----
         cols = list(final_df.columns)
+
+        # Insert cost after Gross Units and FNS after cost
         if "Gross Units" in cols and "cost" in cols:
             idx = cols.index("Gross Units")
             cols.insert(idx + 1, cols.pop(cols.index("cost")))
@@ -124,7 +162,7 @@ if flipkart_file and top_products_file:
             cols.insert(idx + 1, cols.pop(cols.index("FNS")))
         final_df = final_df[cols]
 
-        # Insert Vendor SKU Code between FNS and FBF Units Percentage (i.e. immediately after FNS)
+        # Insert Vendor SKU Code immediately after FNS
         cols = list(final_df.columns)
         if "FNS" in cols and "Vendor SKU Code" in cols:
             cols.remove("Vendor SKU Code")
@@ -132,9 +170,10 @@ if flipkart_file and top_products_file:
             cols.insert(insert_pos, "Vendor SKU Code")
             final_df = final_df[cols]
 
-        # 🔄 Normalize column names & map Final Sale Amount / Final Sales Amount -> Sales
+        # ---- NORMALIZE COLUMN NAMES ----
         final_df.columns = final_df.columns.str.strip()
 
+        # ---- MAP SALES COLUMN ----
         if "Sales" not in final_df.columns:
             if "Final Sale Amount" in final_df.columns:
                 final_df = final_df.rename(columns={"Final Sale Amount": "Sales"})
@@ -142,11 +181,29 @@ if flipkart_file and top_products_file:
                 final_df = final_df.rename(columns={"Final Sales Amount": "Sales"})
             else:
                 raise KeyError(
-                    "❌ Could not find a sales column. "
-                    "Expected 'Final Sale Amount' or 'Final Sales Amount' in the Top Products file."
+                    "❌ Sales column nahi mila. Expected 'Final Sale Amount' ya 'Final Sales Amount' "
+                    "Top Products file me."
                 )
 
-        # Simple pivots (Brand, Manager)
+        if "Gross Units" not in final_df.columns:
+            raise KeyError("'Gross Units' column required hai analysis ke liye.")
+
+        # ---- SUMMARY METRICS ----
+        st.markdown("---")
+        st.header("📈 Summary Metrics")
+
+        total_units = int(final_df["Gross Units"].sum())
+        total_sales = final_df["Sales"].sum()
+        brand_count = final_df["Brand"].nunique()
+        manager_count = final_df["Manager"].nunique()
+
+        m1, m2, m3, m4 = st.columns(4)
+        m1.metric("Total Gross Units", f"{total_units:,}")
+        m2.metric("Total Sales", f"₹{total_sales:,.0f}")
+        m3.metric("Number of Brands", brand_count)
+        m4.metric("Number of Managers", manager_count)
+
+        # ---- PIVOTS ----
         pivot_brand = final_df.pivot_table(
             index="Brand",
             values=["Gross Units", "Sales"],
@@ -163,16 +220,8 @@ if flipkart_file and top_products_file:
         )
         pivot_manager.loc["Grand Total"] = pivot_manager.sum()
 
-        # Summary Metrics
-        st.header("📈 Summary Metrics")
-        m1, m2, m3, m4 = st.columns(4)
-
-        m1.metric("Total Gross Units", f"{int(final_df['Gross Units'].sum()):,}")
-        m2.metric("Total Sales", f"₹{final_df['Sales'].sum():,.0f}")
-        m3.metric("Number of Brands", len(pivot_brand) - 1)
-        m4.metric("Number of Managers", len(pivot_manager) - 1)
-
-        # Tabs
+        # ---- TABS ----
+        st.markdown("---")
         tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs(
             [
                 "📊 Brand Analysis",
@@ -184,14 +233,14 @@ if flipkart_file and top_products_file:
             ]
         )
 
-        # BRAND TAB
+        # ---------- TAB 1: BRAND ----------
         with tab1:
             st.subheader("Sales by Brand")
             pivot_brand_chart = pivot_brand[:-1].reset_index()
             c1, c2 = st.columns(2)
 
             with c1:
-                st.dataframe(pivot_brand, use_container_width=True)
+                st.dataframe(pivot_brand, width="stretch")
                 st.download_button(
                     "📥 Download Brand Pivot",
                     pivot_brand.to_csv(),
@@ -206,16 +255,16 @@ if flipkart_file and top_products_file:
                     title="Sales by Brand",
                     color="Sales",
                 )
-                st.plotly_chart(fig, use_container_width=True)
+                st.plotly_chart(fig, width="stretch")
 
-        # MANAGER TAB
+        # ---------- TAB 2: MANAGER ----------
         with tab2:
             st.subheader("Sales by Manager")
             pivot_manager_chart = pivot_manager[:-1].reset_index()
             c1, c2 = st.columns(2)
 
             with c1:
-                st.dataframe(pivot_manager, use_container_width=True)
+                st.dataframe(pivot_manager, width="stretch")
                 st.download_button(
                     "📥 Download Manager Pivot",
                     pivot_manager.to_csv(),
@@ -230,19 +279,19 @@ if flipkart_file and top_products_file:
                     title="Sales by Manager",
                     color="Sales",
                 )
-                st.plotly_chart(fig, use_container_width=True)
+                st.plotly_chart(fig, width="stretch")
 
-        # RAW DATA TAB
+        # ---------- TAB 3: RAW DATA ----------
         with tab3:
             st.subheader("Complete Dataset (with cost, FNS & Vendor SKU Code)")
-            st.dataframe(final_df, use_container_width=True)
+            st.dataframe(final_df, width="stretch")
             st.download_button(
                 "📥 Download Complete CSV",
                 final_df.to_csv(index=False),
                 "final_dataset.csv",
             )
 
-        # CHART TAB
+        # ---------- TAB 4: CHARTS ----------
         with tab4:
             st.subheader("Visual Analytics")
             c1, c2 = st.columns(2)
@@ -254,7 +303,7 @@ if flipkart_file and top_products_file:
                     names="Brand",
                     title="Sales Distribution by Brand",
                 )
-                st.plotly_chart(fig, use_container_width=True)
+                st.plotly_chart(fig, width="stretch")
 
             with c2:
                 fig = px.pie(
@@ -263,28 +312,25 @@ if flipkart_file and top_products_file:
                     names="Manager",
                     title="Sales Distribution by Manager",
                 )
-                st.plotly_chart(fig, use_container_width=True)
+                st.plotly_chart(fig, width="stretch")
 
-        # BRAND / FNS TAB WITH SUBTOTALS & GRAND TOTAL
+        # ---------- TAB 5: BRAND / FNS ----------
         with tab5:
             st.subheader("Brand / FNS Pivot (with totals)")
 
             agg_cols = ["Gross Units", "Sales", "cost"]
 
-            # Base aggregation at Brand + FNS level
             base_bf = (
                 final_df.groupby(["Brand", "FNS"], dropna=False)[agg_cols]
                 .sum()
                 .reset_index()
             )
-            base_bf["order"] = 0  # detail rows
+            base_bf["order"] = 0
 
-            # Brand totals
             brand_totals_bf = base_bf.groupby(["Brand"], as_index=False)[agg_cols].sum()
             brand_totals_bf["FNS"] = brand_totals_bf["Brand"] + " Total"
             brand_totals_bf["order"] = 1
 
-            # Grand total
             grand_total_bf = pd.DataFrame(
                 {
                     "Brand": [""],
@@ -296,7 +342,6 @@ if flipkart_file and top_products_file:
                 }
             )
 
-            # Combine
             combined_bf = pd.concat(
                 [base_bf, brand_totals_bf, grand_total_bf],
                 ignore_index=True,
@@ -304,13 +349,11 @@ if flipkart_file and top_products_file:
 
             combined_bf["is_grand"] = (combined_bf["FNS"] == "Grand Total").astype(int)
 
-            # Sort: Brand → order (detail, brand total, grand) → Gross Units desc
             combined_bf = combined_bf.sort_values(
                 by=["is_grand", "Brand", "order", "Gross Units"],
                 ascending=[True, True, True, False],
             )
 
-            # Rename columns to "Sum of ..."
             combined_bf = combined_bf.rename(
                 columns={
                     "Gross Units": "Sum of Gross Units",
@@ -319,40 +362,36 @@ if flipkart_file and top_products_file:
                 }
             )
 
-            # Set MultiIndex Brand → FNS
             display_bf = combined_bf.drop(columns=["order", "is_grand"]).set_index(
                 ["Brand", "FNS"]
             )
 
-            st.dataframe(display_bf, use_container_width=True)
+            st.dataframe(display_bf, width="stretch")
             st.download_button(
                 "📥 Download Brand / FNS Pivot",
                 display_bf.to_csv(),
                 "pivot_brand_fns.csv",
             )
 
-        # MANAGER / BRAND / FNS TAB WITH SUBTOTALS & GRAND TOTAL
+        # ---------- TAB 6: MANAGER / BRAND / FNS ----------
         with tab6:
             st.subheader("Manager / Brand / FNS Pivot (with totals)")
 
             agg_cols = ["Gross Units", "Sales", "cost"]
 
-            # Base aggregation at Manager + Brand + FNS level
             base = (
                 final_df.groupby(["Manager", "Brand", "FNS"], dropna=False)[agg_cols]
                 .sum()
                 .reset_index()
             )
-            base["order"] = 0  # detail rows
+            base["order"] = 0
 
-            # Brand totals within each Manager
             brand_totals = (
                 base.groupby(["Manager", "Brand"], as_index=False)[agg_cols].sum()
             )
             brand_totals["FNS"] = brand_totals["Brand"] + " Total"
             brand_totals["order"] = 1
 
-            # Manager totals
             manager_totals = (
                 base.groupby(["Manager"], as_index=False)[agg_cols].sum()
             )
@@ -360,7 +399,6 @@ if flipkart_file and top_products_file:
             manager_totals["FNS"] = manager_totals["Manager"] + " Total"
             manager_totals["order"] = 2
 
-            # Grand total
             grand_total = pd.DataFrame(
                 {
                     "Manager": [""],
@@ -373,7 +411,6 @@ if flipkart_file and top_products_file:
                 }
             )
 
-            # Combine all
             combined = pd.concat(
                 [base, brand_totals, manager_totals, grand_total],
                 ignore_index=True,
@@ -381,13 +418,11 @@ if flipkart_file and top_products_file:
 
             combined["is_grand"] = (combined["FNS"] == "Grand Total").astype(int)
 
-            # Sort: Manager → Brand → order → Gross Units desc; Grand Total last
             combined = combined.sort_values(
                 by=["is_grand", "Manager", "Brand", "order", "Gross Units"],
                 ascending=[True, True, True, True, False],
             )
 
-            # Rename columns
             combined = combined.rename(
                 columns={
                     "Gross Units": "Sum of Gross Units",
@@ -396,12 +431,11 @@ if flipkart_file and top_products_file:
                 }
             )
 
-            # Set index: Manager → Brand → FNS
             display_df = combined.drop(columns=["order", "is_grand"]).set_index(
                 ["Manager", "Brand", "FNS"]
             )
 
-            st.dataframe(display_df, use_container_width=True)
+            st.dataframe(display_df, width="stretch")
             st.download_button(
                 "📥 Download Manager / Brand / FNS Pivot",
                 display_df.to_csv(),
