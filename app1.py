@@ -92,6 +92,15 @@ if generate:
 
             if "Gross Units" not in final_df.columns:
                 raise KeyError("Gross Units column required")
+            
+            # ---------- FIX NEGATIVE UNITS ----------
+            for col in final_df.columns:
+                if col.strip().lower() == "final sale units":
+                    final_df[col] = pd.to_numeric(final_df[col], errors="coerce").fillna(0)
+                    final_df[col] = final_df[col].clip(lower=0)
+
+            if "Gross Units" in final_df.columns:
+                final_df["Gross Units"] = final_df["Gross Units"].clip(lower=0)
 
             # ---------- METRICS ----------
             st.markdown("---")
