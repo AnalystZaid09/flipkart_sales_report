@@ -50,6 +50,10 @@ if generate:
                 if top_products_file.name.lower().endswith(".csv")
                 else pd.read_excel(top_products_file)
             )
+            
+            # 🔁 If Brand already exists in Top Products, rename it
+            if "Brand" in top.columns:
+                top = top.rename(columns={"Brand": "Brand1"})
 
             # ---------- VALIDATION ----------
             if "SKU ID" not in top.columns:
