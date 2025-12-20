@@ -177,7 +177,7 @@ if generate:
                 base = final_df.groupby(
                     ["FNS", "Brand", "Product Name", "Vendor SKU Codes"]
                 )[["Final Sale Units", "Sales", "cost"]].sum()
-
+            
                 grand = pd.DataFrame(
                     [[base["Final Sale Units"].sum(), base["Sales"].sum(), base["cost"].sum()]],
                     index=pd.MultiIndex.from_tuples(
@@ -186,8 +186,10 @@ if generate:
                     ),
                     columns=base.columns
                 )
-
-                st.dataframe(pd.concat([base, grand]), use_container_width=True)
+            
+                pivot_df = pd.concat([base, grand])
+                st.dataframe(pivot_df, use_container_width=True)
+            
                 download_excel(pivot_df, "brand_fns_pivot.xlsx", "⬇️ Download Brand/FNS Pivot")
 
             # ---------- TAB 6 ----------
@@ -221,5 +223,6 @@ if generate:
 
 else:
     st.info("👆 Upload files and click **Generate Analysis**")
+
 
 
