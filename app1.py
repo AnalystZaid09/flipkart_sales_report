@@ -5,6 +5,20 @@ import warnings
 
 warnings.filterwarnings("ignore", message="Workbook contains no default style*")
 
+import io
+
+def download_excel(df, filename, label):
+    buffer = io.BytesIO()
+    with pd.ExcelWriter(buffer, engine="xlsxwriter") as writer:
+        df.reset_index().to_excel(writer, index=False)
+    st.download_button(
+        label=label,
+        data=buffer.getvalue(),
+        file_name=filename,
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )
+
+
 # ---------- PAGE CONFIG ----------
 st.set_page_config(page_title="Sales Analysis Dashboard", layout="wide")
 
@@ -134,16 +148,19 @@ if generate:
                 brand_tbl = final_df.groupby("Brand")[["Final Sale Units", "Sales"]].sum()
                 brand_tbl.loc["Grand Total"] = brand_tbl.sum()
                 st.dataframe(brand_tbl, use_container_width=True)
+                download_excel(brand_tbl, "brand_analysis.xlsx", "⬇️ Download Brand Report")
 
             # ---------- TAB 2 (MANAGER + GRAND TOTAL) ----------
             with tab2:
                 mgr_tbl = final_df.groupby("Manager")[["Final Sale Units", "Sales"]].sum()
                 mgr_tbl.loc["Grand Total"] = mgr_tbl.sum()
                 st.dataframe(mgr_tbl, use_container_width=True)
+                download_excel(mgr_tbl, "manager_analysis.xlsx", "⬇️ Download Manager Report")
 
             # ---------- TAB 3 ----------
             with tab3:
                 st.dataframe(final_df, use_container_width=True)
+                download_excel(final_df, "raw_data.xlsx", "⬇️ Download Raw Data")
 
             # ---------- TAB 4 ----------
             with tab4:
@@ -171,6 +188,7 @@ if generate:
                 )
 
                 st.dataframe(pd.concat([base, grand]), use_container_width=True)
+                download_excel(pivot_df, "brand_fns_pivot.xlsx", "⬇️ Download Brand/FNS Pivot")
 
             # ---------- TAB 6 ----------
             with tab6:
@@ -188,6 +206,11 @@ if generate:
                 )
 
                 st.dataframe(pd.concat([base, grand]), use_container_width=True)
+                download_excel(
+                    pivot_df,
+                    "manager_brand_fns_pivot.xlsx",
+                    "⬇️ Download Manager/Brand/FNS Pivot"
+                )
 
             st.success("✅ Analysis generated successfully!")
 
@@ -196,3 +219,4 @@ if generate:
 
 else:
     st.info("👆 Upload files and click **Generate Analysis**")
+
