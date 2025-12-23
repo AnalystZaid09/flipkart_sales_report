@@ -116,6 +116,8 @@ if generate:
             final_df["Final Sale Units"] = pd.to_numeric(
                 final_df["Final Sale Units"], errors="coerce"
             ).fillna(0).clip(lower=0)
+            # ---------- REMOVE ZERO SALE UNITS ---------- 22/12/2025 changes
+            final_df = final_df[final_df["Final Sale Units"] > 0]
 
             if "Final Sale Amount" in final_df.columns:
                 final_df.rename(columns={"Final Sale Amount": "Sales"}, inplace=True)
@@ -227,6 +229,7 @@ if generate:
 
 else:
     st.info("👆 Upload files and click **Generate Analysis**")
+
 
 
 
