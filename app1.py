@@ -174,6 +174,8 @@ if generate:
 
             # ---------- TAB 5 ----------
             with tab5:
+                # remove 0 - 22/12/2025 changes
+                filtered_df = final_df[final_df["Final Sale Units"] > 0]
                 base = final_df.groupby(
                     ["FNS", "Brand", "Product Name", "Vendor SKU Codes"]
                 )[["Final Sale Units", "Sales", "cost"]].sum()
@@ -194,6 +196,8 @@ if generate:
 
             # ---------- TAB 6 ----------
             with tab6:
+                # remove 0 from final sale units - 22/12/2025
+                filtered_df = final_df[final_df["Final Sale Units"] > 0]
                 base = final_df.groupby(
                     ["FNS", "Manager", "Brand", "Product Name", "Vendor SKU Codes"]
                 )[["Final Sale Units", "Sales", "cost"]].sum()
@@ -223,6 +227,7 @@ if generate:
 
 else:
     st.info("👆 Upload files and click **Generate Analysis**")
+
 
 
 
