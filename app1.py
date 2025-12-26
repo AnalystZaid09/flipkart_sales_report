@@ -10,7 +10,7 @@ import io
 def download_excel(df, filename, label):
     buffer = io.BytesIO()
     with pd.ExcelWriter(buffer, engine="xlsxwriter") as writer:
-        df.reset_index().to_excel(writer, index=False)
+        df.to_excel(writer, index=True)  # ✅ MultiIndex safe
     st.download_button(
         label=label,
         data=buffer.getvalue(),
@@ -19,8 +19,9 @@ def download_excel(df, filename, label):
     )
 
 
+
 # ---------- PAGE CONFIG ----------
-st.set_page_config(page_title="Sales Analysis Dashboard", layout="wide")
+st.set_page_config(page_title="Flipkart Sales Analysis", layout="wide")
 
 # ---------- SIDEBAR ----------
 with st.sidebar:
@@ -33,7 +34,7 @@ with st.sidebar:
     """)
 
 # ---------- TITLE ----------
-st.title("📊 Sales Analysis Dashboard")
+st.title("📊 Flipkart Sales Analysis")
 
 # ---------- FILE UPLOAD ----------
 c1, c2 = st.columns(2)
@@ -147,17 +148,70 @@ if generate:
 
             # ---------- TAB 1 (BRAND + GRAND TOTAL) ----------
             with tab1:
-                brand_tbl = final_df.groupby("Brand")[["Final Sale Units", "Sales"]].sum()
-                brand_tbl.loc["Grand Total"] = brand_tbl.sum()
-                st.dataframe(brand_tbl, use_container_width=True)
-                download_excel(brand_tbl, "brand_analysis.xlsx", "⬇️ Download Brand Report")
+                pivot = final_df.pivot_table(
+                    index="Brand",
+                    columns="Order Date",
+                    values=["Final Sale Units", "Sales"],
+                    aggfunc="sum",
+                    fill_value=0
+                )
 
-            # ---------- TAB 2 (MANAGER + GRAND TOTAL) ----------
+                # Swap levels to bring Order Date on top
+                pivot.columns = pivot.columns.swaplevel(0, 1)
+                pivot = pivot.sort_index(axis=1, level=0)
+
+                # Rebuild columns as (date, metric) pairs
+                pivot.columns = pd.MultiIndex.from_tuples(
+                    [(date, "Final Sale Units") if metric == "Final Sale Units" else (date, "Sales")
+                    for date, metric in pivot.columns]
+                )
+
+                # Add totals columns on right
+                pivot["Total sum of Final Sale Units"] = final_df.groupby("Brand")["Final Sale Units"].sum()
+                pivot["Total sum of Sales"] = final_df.groupby("Brand")["Sales"].sum()
+
+                # Add Grand Total row at bottom
+                pivot.loc["Grand Total"] = pivot.sum(numeric_only=True)
+
+                st.dataframe(pivot, use_container_width=True)
+
+                # MultiIndex safe Excel download
+                buffer = io.BytesIO()
+                with pd.ExcelWriter(buffer, engine="xlsxwriter") as writer:
+                    pivot.to_excel(writer, index=True)
+                st.download_button("⬇️ Download Brand Pivot", buffer.getvalue(), "brand_pivot.xlsx")
+
+
             with tab2:
-                mgr_tbl = final_df.groupby("Manager")[["Final Sale Units", "Sales"]].sum()
-                mgr_tbl.loc["Grand Total"] = mgr_tbl.sum()
-                st.dataframe(mgr_tbl, use_container_width=True)
-                download_excel(mgr_tbl, "manager_analysis.xlsx", "⬇️ Download Manager Report")
+                pivot = final_df.pivot_table(
+                    index="Manager",
+                    columns="Order Date",
+                    values=["Final Sale Units", "Sales"],
+                    aggfunc="sum",
+                    fill_value=0
+                )
+
+                pivot.columns = pivot.columns.swaplevel(0, 1)
+                pivot = pivot.sort_index(axis=1, level=0)
+
+                pivot.columns = pd.MultiIndex.from_tuples(
+                    [(date, "Final Sale Units") if metric == "Final Sale Units" else (date, "Sales")
+                    for date, metric in pivot.columns]
+                )
+
+                # Add totals columns on right
+                pivot["Total sum of Final Sale Units"] = final_df.groupby("Manager")["Final Sale Units"].sum()
+                pivot["Total sum of Sales"] = final_df.groupby("Manager")["Sales"].sum()
+
+                # Grand Total row
+                pivot.loc["Grand Total"] = pivot.sum(numeric_only=True)
+
+                st.dataframe(pivot, use_container_width=True)
+
+                buffer = io.BytesIO()
+                with pd.ExcelWriter(buffer, engine="xlsxwriter") as writer:
+                    pivot.to_excel(writer, index=True)
+                st.download_button("⬇️ Download Manager Pivot", buffer.getvalue(), "manager_pivot.xlsx")
 
             # ---------- TAB 3 ----------
             with tab3:
@@ -229,7 +283,6 @@ if generate:
 
 else:
     st.info("👆 Upload files and click **Generate Analysis**")
-
 
 
 
