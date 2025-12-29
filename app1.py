@@ -138,13 +138,15 @@ if generate:
             m4.metric("Managers", final_df["Manager"].nunique())
 
             # ---------- TABS ----------
-            tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
+            tab1, tab2, tab3, tab4, tab5, tab6, tab7,tab8 = st.tabs([
                 "📊 Brand Analysis",
                 "👥 Manager Analysis",
                 "📋 Raw Data",
                 "📉 Charts",
                 "📦 Brand / FNS Pivot",
                 "🏷 Manager / Brand / FNS Pivot",
+                "📌 Brand Pivot",
+                "📌 Brand Manager Pivot"
             ])
 
             # ---------- TAB 1 (BRAND + GRAND TOTAL) ----------
@@ -277,6 +279,36 @@ if generate:
                     "⬇️ Download Manager/Brand/FNS Pivot"
                 )
 
+            # ---------- TAB 7 : BRAND PIVOT ----------
+            with tab7:
+                brand_pivot = final_df.pivot_table(
+                    index="Brand",
+                    values=["Final Sale Units", "Sales"],
+                    aggfunc="sum",
+                    fill_value=0
+                ).rename(columns={
+                    "Final Sale Units": "Sum of Final Sale Units",
+                    "Sales": "Sum of Final Sale Amount"
+                })
+            
+                st.dataframe(brand_pivot, use_container_width=True)
+                download_excel(brand_pivot, "brand_pivot.xlsx", "⬇️ Download Brand Pivot")
+            
+            # ---------- TAB 8 : BRAND MANAGER PIVOT ----------
+            with tab8:
+                manager_pivot = final_df.pivot_table(
+                    index="Manager",
+                    values=["Final Sale Units", "Sales"],
+                    aggfunc="sum",
+                    fill_value=0
+                ).rename(columns={
+                    "Final Sale Units": "Sum of Final Sale Units",
+                    "Sales": "Sum of Final Sale Amount"
+                })
+            
+                st.dataframe(manager_pivot, use_container_width=True)
+                download_excel(manager_pivot, "manager_pivot.xlsx", "⬇️ Download Manager Pivot")
+
             st.success("✅ Analysis generated successfully!")
 
         except Exception as e:
@@ -284,6 +316,7 @@ if generate:
 
 else:
     st.info("👆 Upload files and click **Generate Analysis**")
+
 
 
 
