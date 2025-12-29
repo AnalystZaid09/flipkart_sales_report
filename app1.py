@@ -290,6 +290,8 @@ if generate:
                     "Final Sale Units": "Sum of Final Sale Units",
                     "Sales": "Sum of Final Sale Amount"
                 })
+
+                brand_pivot.loc["Grand Total"] = brand_pivot.sum(numeric_only=True)
             
                 st.dataframe(brand_pivot, use_container_width=True)
                 download_excel(brand_pivot, "brand_pivot.xlsx", "⬇️ Download Brand Pivot")
@@ -305,6 +307,8 @@ if generate:
                     "Final Sale Units": "Sum of Final Sale Units",
                     "Sales": "Sum of Final Sale Amount"
                 })
+
+                manager_pivot.loc["Grand Total"] = manager_pivot.sum(numeric_only=True)
             
                 st.dataframe(manager_pivot, use_container_width=True)
                 download_excel(manager_pivot, "manager_pivot.xlsx", "⬇️ Download Manager Pivot")
@@ -316,6 +320,7 @@ if generate:
 
 else:
     st.info("👆 Upload files and click **Generate Analysis**")
+
 
 
 
