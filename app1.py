@@ -129,6 +129,9 @@ if generate:
             final_df["Manager"] = final_df["Manager"].fillna("Unknown")
             final_df["FNS"] = final_df["FNS"].fillna("Unknown")
 
+            # ---------- NEW COLUMN: As Per Qty Cost ----------
+            final_df["As Per Qty Cost"] = final_df["cost"] * final_df["Final Sale Units"]
+
             # ---------- METRICS ----------
             st.markdown("---")
             m1, m2, m3, m4 = st.columns(4)
@@ -320,6 +323,7 @@ if generate:
 
 else:
     st.info("👆 Upload files and click **Generate Analysis**")
+
 
 
 
