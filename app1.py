@@ -128,7 +128,7 @@ if generate:
             final_df["cost"] = pd.to_numeric(final_df["cost"], errors="coerce").fillna(0)
             final_df["Manager"] = final_df["Manager"].fillna("Unknown")
             final_df["FNS"] = final_df["FNS"].fillna("Unknown")
-
+            
             # ---------- NEW COLUMN: As Per Qty Cost ----------
             final_df["As Per Qty Cost"] = final_df["cost"] * final_df["Final Sale Units"]
 
@@ -238,22 +238,37 @@ if generate:
             with tab5:
                 # remove 0 - 22/12/2025 changes
                 filtered_df = final_df[final_df["Final Sale Units"] > 0]
+                # Correct aggregation
                 base = final_df.groupby(
                     ["FNS", "Brand", "Product Name", "Vendor SKU Codes"]
-                )[["Final Sale Units", "Sales", "cost"]].sum()
-            
+                ).agg({
+                    "Final Sale Units": "sum",
+                    "Sales": "sum",
+                    "cost": "mean"   # ✔ cost ka average lo
+                })
+
+                # Correct multiplication after aggregation
+                base["As Per Qty Cost"] = base["cost"] * base["Final Sale Units"]
+
+                # Grand Total row (cost ka bhi overall mean rakho)
                 grand = pd.DataFrame(
-                    [[base["Final Sale Units"].sum(), base["Sales"].sum(), base["cost"].sum()]],
+                    [[
+                        base["Final Sale Units"].sum(),
+                        base["Sales"].sum(),
+                        base["cost"].mean(),
+                        (base["cost"] * base["Final Sale Units"]).sum()
+                    ]],
                     index=pd.MultiIndex.from_tuples(
                         [("Grand Total", "", "", "")],
                         names=base.index.names
                     ),
-                    columns=base.columns
+                    columns=["Final Sale Units", "Sales", "cost", "As Per Qty Cost"]
                 )
-            
+
                 pivot_df = pd.concat([base, grand])
+
+                # Display & download
                 st.dataframe(pivot_df, use_container_width=True)
-            
                 download_excel(pivot_df, "brand_fns_pivot.xlsx", "⬇️ Download Brand/FNS Pivot")
 
             # ---------- TAB 6 ----------
@@ -262,25 +277,29 @@ if generate:
                 filtered_df = final_df[final_df["Final Sale Units"] > 0]
                 base = final_df.groupby(
                     ["FNS", "Manager", "Brand", "Product Name", "Vendor SKU Codes"]
-                )[["Final Sale Units", "Sales", "cost"]].sum()
-            
+                ).agg({
+                    "Final Sale Units": "sum",
+                    "Sales": "sum",
+                    "cost": "mean"  # ⚠ cost ko sum nahi, average/mean rakho
+                })
+
+                # Ab correct multiplication karo:
+                base["As Per Qty Cost"] = base["cost"] * base["Final Sale Units"]
+
+                # Grand total row
                 grand = pd.DataFrame(
-                    [[base["Final Sale Units"].sum(), base["Sales"].sum(), base["cost"].sum()]],
+                    [[base["Final Sale Units"].sum(), base["Sales"].sum(), base["cost"].mean(), (base["cost"] * base["Final Sale Units"]).sum()]],
                     index=pd.MultiIndex.from_tuples(
                         [("Grand Total", "", "", "", "")],
                         names=base.index.names
                     ),
-                    columns=base.columns
+                    columns=["Final Sale Units", "Sales", "cost", "As Per Qty Cost"]
                 )
-            
+
                 pivot_df = pd.concat([base, grand])
                 st.dataframe(pivot_df, use_container_width=True)
-            
-                download_excel(
-                    pivot_df,
-                    "manager_brand_fns_pivot.xlsx",
-                    "⬇️ Download Manager/Brand/FNS Pivot"
-                )
+
+                download_excel(pivot_df, "manager_brand_fns_pivot.xlsx", "⬇️ Download Manager/Brand/FNS Pivot")
 
             # ---------- TAB 7 : BRAND PIVOT ----------
             with tab7:
@@ -323,11 +342,3 @@ if generate:
 
 else:
     st.info("👆 Upload files and click **Generate Analysis**")
-
-
-
-
-
-
-
-
