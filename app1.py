@@ -108,10 +108,13 @@ if generate:
                 final_df["Brand"]
                 .astype(str)
                 .str.strip()
+                .replace(["", "nan", "None"], "Unknown")   # handle blanks + nan strings
                 .str.lower()
                 .str.title()
-                .replace("Nan", "Unknown")
             )
+            
+            # Also handle actual NaN values (important!)
+            final_df["Brand"] = final_df["Brand"].fillna("Unknown")
 
             # ---------- NUMERIC CLEAN ----------
             final_df["Final Sale Units"] = pd.to_numeric(
