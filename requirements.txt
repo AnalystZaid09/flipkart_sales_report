@@ -1,5 +1,5 @@
-streamlit 
-pandas 
+streamlit==1.60.0
+pandas
 plotly
 xlsxwriter
 openpyxl
